@@ -1,0 +1,5 @@
+numpy==1.26.4
+opencv-python==4.9.0.80
+PyMuPDF==1.23.22
+PyMuPDFb==1.23.22
+pywin32==306
