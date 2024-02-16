@@ -1,5 +1,13 @@
+certifi==2024.2.2
+charset-normalizer==3.3.2
+idna==3.6
+lxml==5.1.0
 numpy==1.26.4
 opencv-python==4.9.0.80
 PyMuPDF==1.23.22
 PyMuPDFb==1.23.22
+python-docx==1.1.0
 pywin32==306
+requests==2.31.0
+typing_extensions==4.9.0
+urllib3==2.2.0

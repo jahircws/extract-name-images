@@ -1,6 +1,7 @@
 
 import cv2
 import numpy as np
+from docx import Document
 import sys
 import os
 import json
@@ -9,6 +10,7 @@ import traceback
 import pythoncom
 import fitz
 import base64
+import uuid
 
 # Load the pre-trained face detection model
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -103,7 +105,7 @@ def extract_images_from_pdf(pdf_path, image_folder):
                 base_image = pdf_document.extract_image(xref)
                 image_bytes = base_image["image"]
                 # print(image_bytes)
-                image_filename = f"page{page_number + 1}_image{img_index + 1}.png"
+                image_filename = f"{uuid.uuid4()}_image.png"
                 image_path = os.path.join(image_folder, image_filename)
                 
                 with open(image_path, "wb") as image_file:
@@ -121,8 +123,61 @@ def extract_images_from_pdf(pdf_path, image_folder):
         traceback.print_exc()
         return []
 
+# Function to extract text from .docx file
+def extract_name_from_docx(docx_path):
+    try:
+        candidate_name = ""
+        doc = Document(docx_path)
+        text = ""
+        for paragraph in doc.paragraphs:
+            # text += paragraph.text + "\n"
+            text = paragraph.text.strip()
+            # for pattern in name_patterns:
+            match = re.search(r"^([A-Z][a-z]*\s?)+$", text)
+            if match:
+                candidate_name = match.group(0).strip()
+                break
+        return candidate_name
+    except Exception as e:
+        # Log the error and return None
+        traceback.print_exc()
+        return None
+
+# Function to extract images from .docx file
+def extract_images_from_docx(docx_path, image_folder):
+    images = []
+    doc = Document(docx_path)
+    for rel_id in doc.part.rels:
+        rel = doc.part.rels[rel_id]
+        print(rel.reltype)
+        if "image" in rel.reltype:
+            print(rel.target_part)
+            # Get image binary data
+            image_part = rel.target_part
+            image_bytes = image_part.blob
+
+            # if not image_exists(image_bytes, image_folder):
+            # Convert image bytes to base64 encoded string
+            # image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+            
+            # Convert the image to grayscale
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            
+            # Detect faces in the image
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            
+            # If faces are detected, save the image
+            if len(faces) > 0:
+                image_filename = f"image_{uuid.uuid4()}.png"
+                image_path = os.path.join(image_folder, image_filename)
+                cv2.imwrite(image_path, image)
+                images.append({"filename": image_filename})
+    return images
+
 def main():
     try:
+        pythoncom.CoInitialize()
         output_json = {"status": "error", "message": "", "data": {}}
         if len(sys.argv) != 2:
             output_json["message"] = "File not found"
@@ -134,13 +189,16 @@ def main():
             output_json["message"] = "File does not exist"
             return json.dumps(output_json, indent=4)
 
-        if not file_path.lower().endswith('.pdf'):
+        if file_path.lower().endswith('.pdf'):
+            candidate_name = extract_candidate_name_from_cv(file_path)
+            extracted_images = extract_images_with_faces_from_pdf(file_path, 'images')
+        elif file_path.lower().endswith('.docx') and file_path.lower().endswith('.doc'):
+            candidate_name = extract_name_from_docx(file_path)
+            extracted_images = extract_images_from_docx(file_path, 'images')
+        else:
             output_json["message"] = "File is not a PDF"
             return json.dumps(output_json, indent=4)
-
-        pythoncom.CoInitialize()
-        candidate_name = extract_candidate_name_from_cv(file_path)
-        extracted_images = extract_images_with_faces_from_pdf(file_path, 'images')
+        
         output_json["status"] = "success"
         output_json["message"] = "File processed successfully"
         output_json["data"]["candidate_name"] = candidate_name
